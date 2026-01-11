@@ -1,11 +1,11 @@
 [Unit]
-Description=Guesstures Charades Game
+Description=ClueCue Charades Game API
 After=network.target
 
 [Service]
 Type=simple
-WorkingDirectory=
-ExecStart=
+WorkingDirectory=/root/charades/cluecue-api
+ExecStart=bun run index.ts
 Restart=on-failure
 RestartSec=5
 

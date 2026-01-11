@@ -1,25 +1,22 @@
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
-import { Database } from 'bun:sqlite';
+import Database from 'better-sqlite3';
 import { v4 as uuidv4 } from 'uuid';
 // import nodemailer from 'nodemailer'; // Uncomment for production email
 import path from 'path';
+import config from '../config.json';
+import { AuthRequest, User, Game, GamePlayer } from './types/types';
 
 const app = express();
-const PORT = 8000;
 const BASE_URL = process.env.BASE_URL || 'http://localhost:8000';
 
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 app.use(cookieParser());
 
-// For development, we'll show the login link directly
-// In production, configure a real email service
-const DEV_MODE = !process.env.SMTP_HOST;
-
 // Initialize database
-const db = new Database(path.join(import.meta.dir, 'guesstures.db'));
+const db = new Database(path.join(__dirname, '../data/charades.db'));
 
 // Create tables
 db.exec(`
@@ -113,19 +110,6 @@ if (wordCount.count === 0) {
   words.forEach(word => insert.run(word));
 }
 
-// Types
-interface User { id: string; email: string; username: string; is_guest: number; }
-interface Game {
-  id: string; name: string; created_by: string;
-  team1_name: string; team2_name: string;
-  team1_score: number; team2_score: number;
-  current_team: number; current_actor_index_t1: number; current_actor_index_t2: number;
-  turn_duration: number; winning_score: number; status: string;
-  current_word?: string; turn_started_at?: string; share_code: string;
-}
-interface GamePlayer { id: string; game_id: string; user_id: string; team: number; turn_order: number; username?: string; }
-interface AuthRequest extends Request { user?: User; }
-
 // Auth middleware
 const authMiddleware = (req: AuthRequest, res: Response, next: NextFunction) => {
   const sessionId = req.cookies?.session;
@@ -164,14 +148,10 @@ app.post('/api/auth/send-link', async (req: Request, res: Response) => {
 
   const link = `${BASE_URL}/auth/verify/${token}`;
   
-  if (DEV_MODE) {
-    // In dev mode, return the link directly
-    console.log(`Login link for ${email}: ${link}`);
-    res.json({ success: true, loginLink: link });
-  } else {
-    // In production, send email (configure SMTP_HOST, etc.)
-    res.json({ success: true, message: 'Check your email for a sign-in link' });
-  }
+  // Show a login link
+  // TODO: This should be a link sent via email or text for easy auth. 
+  console.log(`Login link for ${email}: ${link}`);
+  res.json({ success: true, loginLink: link });
 });
 
 app.post('/api/auth/verify', (req: Request, res: Response) => {
@@ -186,7 +166,7 @@ app.post('/api/auth/verify', (req: Request, res: Response) => {
   let user = db.prepare('SELECT * FROM users WHERE email = ?').get(authToken.email) as User | undefined;
   if (!user) {
     const userId = uuidv4();
-    const username = authToken.email.split('@')[0];
+    const username = authToken.email.split('@')[0] ?? userId;
     db.prepare('INSERT INTO users (id, email, username, is_guest) VALUES (?, ?, ?, 0)').run(userId, authToken.email, username);
     user = { id: userId, email: authToken.email, username, is_guest: 0 };
   }
@@ -458,11 +438,11 @@ app.delete('/api/words/:id', authMiddleware, (req: AuthRequest, res: Response) =
 });
 
 // Serve static files
-app.use(express.static(path.join(import.meta.dir, '../client/dist')));
+app.use(express.static(path.join(__dirname, '../client/dist')));
 app.get('/{*path}', (req: Request, res: Response) => {
   if (!req.path.startsWith('/api')) {
-    res.sendFile(path.join(import.meta.dir, '../client/dist/index.html'));
+    res.sendFile(path.join(__dirname, '../client/dist/index.html'));
   }
 });
 
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(config.server.port, () => console.log(`Server running on port ${config.server.port}`));

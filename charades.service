@@ -1,0 +1,13 @@
+[Unit]
+Description=ClueCue charades Game
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/root/charades/cluecue
+ExecStart=npm run dev
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
