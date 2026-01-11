@@ -4,10 +4,8 @@ After=network.target
 
 [Service]
 Type=simple
-User=exedev
-WorkingDirectory=/home/exedev/guesstures/api
-Environment=PATH=/home/exedev/.bun/bin:/usr/bin
-ExecStart=/home/exedev/.bun/bin/bun run index.ts
+WorkingDirectory=
+ExecStart=
 Restart=on-failure
 RestartSec=5
 
