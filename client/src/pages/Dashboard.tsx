@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { User, Game } from '../types';
 import { api } from '../api';
+import { Button, Modal, Input, Card, Alert, Container } from '../components';
 
 interface DashboardProps {
   user: User;
@@ -43,74 +44,76 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
     } catch { setError('Game not found'); }
   };
 
+  const getStatusClass = (status: string) => {
+    if (status === 'waiting') return 'waiting';
+    if (status === 'playing') return 'playing';
+    return 'finished';
+  };
+
   return (
     <div className="dashboard">
-      <header>
+      <header className="header">
         <h1>🎭 Guesstures</h1>
-        <div className="user-info">
+        <div className="header-right">
           <span>Welcome, {user.username}!</span>
-          <button onClick={onLogout}>Logout</button>
+          <Button variant="secondary" size="sm" onClick={onLogout}>Logout</Button>
         </div>
       </header>
 
-      <div className="dashboard-content">
-        <div className="actions">
-          <button className="primary" onClick={() => setShowCreate(true)}>Create New Game</button>
-          <button onClick={() => setShowJoin(true)}>Join Game</button>
-        </div>
+      <Container size="lg">
+        <div className="dashboard-content">
+          <div className="actions">
+            <Button variant="primary" size="lg" onClick={() => setShowCreate(true)}>Create New Game</Button>
+            <Button variant="secondary" size="lg" onClick={() => setShowJoin(true)}>Join Game</Button>
+          </div>
 
-        {showCreate && (
-          <div className="modal-overlay" onClick={() => setShowCreate(false)}>
-            <div className="modal" onClick={e => e.stopPropagation()}>
-              <h2>Create New Game</h2>
-              {error && <div className="error">{error}</div>}
+          {showCreate && (
+            <Modal title="Create New Game" onClose={() => setShowCreate(false)}>
+              {error && <Alert type="error">{error}</Alert>}
               <form onSubmit={handleCreateGame}>
-                <input type="text" placeholder="Game Name" value={gameName} onChange={e => setGameName(e.target.value)} required />
-                <input type="text" placeholder="Team 1 Name" value={team1Name} onChange={e => setTeam1Name(e.target.value)} />
-                <input type="text" placeholder="Team 2 Name" value={team2Name} onChange={e => setTeam2Name(e.target.value)} />
+                <Input placeholder="Game Name" value={gameName} onChange={e => setGameName(e.target.value)} required />
+                <Input placeholder="Team 1 Name" value={team1Name} onChange={e => setTeam1Name(e.target.value)} />
+                <Input placeholder="Team 2 Name" value={team2Name} onChange={e => setTeam2Name(e.target.value)} />
                 <div className="modal-actions">
-                  <button type="button" onClick={() => setShowCreate(false)}>Cancel</button>
-                  <button type="submit" className="primary">Create</button>
+                  <Button variant="secondary" type="button" onClick={() => setShowCreate(false)}>Cancel</Button>
+                  <Button variant="primary" type="submit">Create</Button>
                 </div>
               </form>
-            </div>
-          </div>
-        )}
-
-        {showJoin && (
-          <div className="modal-overlay" onClick={() => setShowJoin(false)}>
-            <div className="modal" onClick={e => e.stopPropagation()}>
-              <h2>Join Game</h2>
-              {error && <div className="error">{error}</div>}
-              <form onSubmit={handleJoinGame}>
-                <input type="text" placeholder="Game Code" value={joinCode} onChange={e => setJoinCode(e.target.value.toUpperCase())} required />
-                <div className="modal-actions">
-                  <button type="button" onClick={() => setShowJoin(false)}>Cancel</button>
-                  <button type="submit" className="primary">Join</button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-
-        <div className="games-list">
-          <h2>Your Games</h2>
-          {games.length === 0 ? (
-            <p className="no-games">No games yet. Create or join one!</p>
-          ) : (
-            <div className="games-grid">
-              {games.map(game => (
-                <div key={game.id} className="game-card" onClick={() => navigate(`/game/${game.id}`)}>
-                  <h3>{game.name}</h3>
-                  <p className="game-status">{game.status === 'waiting' ? 'Waiting' : game.status === 'playing' ? 'In progress' : 'Finished'}</p>
-                  <p className="game-score">{game.team1_name}: {game.team1_score} - {game.team2_name}: {game.team2_score}</p>
-                  <p className="game-code">Code: {game.share_code}</p>
-                </div>
-              ))}
-            </div>
+            </Modal>
           )}
+
+          {showJoin && (
+            <Modal title="Join Game" onClose={() => setShowJoin(false)}>
+              {error && <Alert type="error">{error}</Alert>}
+              <form onSubmit={handleJoinGame}>
+                <Input placeholder="Game Code" value={joinCode} onChange={e => setJoinCode(e.target.value.toUpperCase())} required />
+                <div className="modal-actions">
+                  <Button variant="secondary" type="button" onClick={() => setShowJoin(false)}>Cancel</Button>
+                  <Button variant="primary" type="submit">Join</Button>
+                </div>
+              </form>
+            </Modal>
+          )}
+
+          <div className="games-section">
+            <h2>Your Games</h2>
+            {games.length === 0 ? (
+              <p className="no-games">No games yet. Create or join one!</p>
+            ) : (
+              <div className="games-grid">
+                {games.map(game => (
+                  <Card key={game.id} className="game-card" onClick={() => navigate(`/game/${game.id}`)}>
+                    <h3>{game.name}</h3>
+                    <p><span className={`status-badge ${getStatusClass(game.status)}`}>{game.status}</span></p>
+                    <p>{game.team1_name}: {game.team1_score} - {game.team2_name}: {game.team2_score}</p>
+                    <p><span className="game-code">Code: {game.share_code}</span></p>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      </Container>
     </div>
   );
 }

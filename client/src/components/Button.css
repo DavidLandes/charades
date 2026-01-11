@@ -1,0 +1,31 @@
+.btn {
+  border: none;
+  border-radius: 8px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-sm { padding: 8px 16px; font-size: 0.875rem; }
+.btn-md { padding: 12px 24px; font-size: 1rem; }
+.btn-lg { padding: 16px 32px; font-size: 1.125rem; }
+
+.btn-primary { background: #5a67d8; color: white; }
+.btn-primary:hover:not(:disabled) { background: #4c51bf; }
+
+.btn-secondary { background: #e2e8f0; color: #1a202c; }
+.btn-secondary:hover:not(:disabled) { background: #cbd5e0; }
+
+.btn-success { background: #38a169; color: white; }
+.btn-success:hover:not(:disabled) { background: #2f855a; }
+
+.btn-warning { background: #d69e2e; color: #1a202c; }
+.btn-warning:hover:not(:disabled) { background: #b7791f; }
+
+.btn-danger { background: #e53e3e; color: white; }
+.btn-danger:hover:not(:disabled) { background: #c53030; }

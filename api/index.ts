@@ -391,6 +391,38 @@ app.post('/api/games/:id/end', authMiddleware, (req: AuthRequest, res: Response)
   res.json({ success: true });
 });
 
+// Word management endpoints
+app.get('/api/words', (req: Request, res: Response) => {
+  const words = db.prepare('SELECT id, word FROM words ORDER BY word ASC').all();
+  res.json(words);
+});
+
+app.post('/api/words', authMiddleware, (req: AuthRequest, res: Response) => {
+  const { word } = req.body;
+  if (!word || typeof word !== 'string' || word.trim().length === 0) {
+    return res.status(400).json({ error: 'Word is required' });
+  }
+  const trimmed = word.trim().toLowerCase();
+  try {
+    const result = db.prepare('INSERT INTO words (word) VALUES (?)').run(trimmed);
+    res.json({ id: result.lastInsertRowid, word: trimmed });
+  } catch (err: any) {
+    if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+      return res.status(400).json({ error: 'Word already exists' });
+    }
+    throw err;
+  }
+});
+
+app.delete('/api/words/:id', authMiddleware, (req: AuthRequest, res: Response) => {
+  const { id } = req.params;
+  const result = db.prepare('DELETE FROM words WHERE id = ?').run(id);
+  if (result.changes === 0) {
+    return res.status(404).json({ error: 'Word not found' });
+  }
+  res.json({ success: true });
+});
+
 // Serve static files
 app.use(express.static(path.join(import.meta.dir, '../client/dist')));
 app.get('/{*path}', (req: Request, res: Response) => {

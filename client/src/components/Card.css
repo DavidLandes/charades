@@ -1,0 +1,10 @@
+.card {
+  background: white;
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+
+.card-active {
+  box-shadow: 0 0 0 3px #5a67d8, 0 4px 20px rgba(0, 0, 0, 0.15);
+}

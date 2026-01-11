@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import type { User, Game } from '../types';
 import { api } from '../api';
+import { Button, Modal, Input, Card, Alert, Container } from '../components';
 
 interface GamePageProps {
   user: User | null;
@@ -24,8 +25,7 @@ export default function GamePage({ user, onLogin }: GamePageProps) {
   const loadGame = useCallback(async () => {
     if (!idOrCode) return;
     try {
-      const gameData = await api.getGame(idOrCode);
-      setGame(gameData);
+      setGame(await api.getGame(idOrCode));
     } catch {
       setError('Game not found');
     } finally {
@@ -51,22 +51,14 @@ export default function GamePage({ user, onLogin }: GamePageProps) {
   const handleGuestJoin = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const newUser = await api.guest(guestName || undefined);
-      onLogin(newUser);
+      onLogin(await api.guest(guestName || undefined));
       setShowJoinModal(false);
-    } catch (err) {
-      setError((err as Error).message);
-    }
+    } catch (err) { setError((err as Error).message); }
   };
 
   const handleJoinTeam = async (team: number) => {
     if (!game || !user) return;
-    try {
-      await api.joinGame(game.id, team);
-      loadGame();
-    } catch (err) {
-      setError((err as Error).message);
-    }
+    try { await api.joinGame(game.id, team); loadGame(); } catch (err) { setError((err as Error).message); }
   };
 
   const handleStartGame = async () => {
@@ -110,133 +102,138 @@ export default function GamePage({ user, onLogin }: GamePageProps) {
     try { await api.endGame(game.id); loadGame(); } catch (err) { setError((err as Error).message); }
   };
 
-  const copyShareLink = () => navigator.clipboard.writeText(`${window.location.origin}/game/${game?.share_code}`);
-
   if (loading) return <div className="loading">Loading game...</div>;
-  if (error && !game) return <div className="error-page"><h1>Error</h1><p>{error}</p><button onClick={() => navigate('/')}>Go Home</button></div>;
+  if (error && !game) return (
+    <div className="error-page">
+      <h1>Error</h1>
+      <p>{error}</p>
+      <Button variant="secondary" onClick={() => navigate('/')}>Go Home</Button>
+    </div>
+  );
   if (!game) return null;
 
   const isPlayer = user && (game.team1_players.some(p => p.user_id === user.id) || game.team2_players.some(p => p.user_id === user.id));
   const isCurrentActor = user?.id === game.current_actor_id;
   const isCreator = user?.id === game.created_by;
   const canStartTurn = game.status === 'playing' && isCurrentActor && !isTurnActive && !game.current_word;
-  const currentActorName = game.current_team === 1
-    ? game.team1_players.find(p => p.user_id === game.current_actor_id)?.username
-    : game.team2_players.find(p => p.user_id === game.current_actor_id)?.username;
+  const currentActorName = (game.current_team === 1 ? game.team1_players : game.team2_players)
+    .find(p => p.user_id === game.current_actor_id)?.username;
+  const currentTeamName = game.current_team === 1 ? game.team1_name : game.team2_name;
 
   return (
     <div className="game-page">
-      <header>
-        <button className="back-btn" onClick={() => navigate('/dashboard')}>← Back</button>
+      <header className="header">
+        <Button variant="secondary" size="sm" onClick={() => navigate('/dashboard')}>← Back</Button>
         <h1>{game.name}</h1>
         <div className="share-section">
-          <span>Code: {game.share_code}</span>
-          <button onClick={copyShareLink}>Copy Link</button>
+          <span className="code">{game.share_code}</span>
+          <Button variant="primary" size="sm" onClick={() => navigator.clipboard.writeText(`${window.location.origin}/game/${game.share_code}`)}>Copy Link</Button>
         </div>
       </header>
 
-      {error && <div className="error">{error}</div>}
+      {error && <Container><Alert type="error">{error}</Alert></Container>}
 
       {!user && (
         <div className="spectator-banner">
           <p>You're watching as a spectator.</p>
-          <button onClick={() => setShowJoinModal(true)}>Join Game</button>
+          <Button variant="primary" size="sm" onClick={() => setShowJoinModal(true)}>Join Game</Button>
         </div>
       )}
 
       {showJoinModal && (
-        <div className="modal-overlay" onClick={() => setShowJoinModal(false)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <h2>Join as Guest</h2>
-            <form onSubmit={handleGuestJoin}>
-              <input type="text" placeholder="Your name (optional)" value={guestName} onChange={e => setGuestName(e.target.value)} />
-              <div className="modal-actions">
-                <button type="button" onClick={() => setShowJoinModal(false)}>Cancel</button>
-                <button type="submit" className="primary">Join</button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <Modal title="Join as Guest" onClose={() => setShowJoinModal(false)}>
+          <form onSubmit={handleGuestJoin}>
+            <Input placeholder="Your name (optional)" value={guestName} onChange={e => setGuestName(e.target.value)} />
+            <div className="modal-actions">
+              <Button variant="secondary" type="button" onClick={() => setShowJoinModal(false)}>Cancel</Button>
+              <Button variant="primary" type="submit">Join</Button>
+            </div>
+          </form>
+        </Modal>
       )}
 
-      <div className="game-content">
-        <div className="scoreboard">
-          <div className={`team ${game.current_team === 1 ? 'active' : ''}`}>
-            <h2>{game.team1_name}</h2>
-            <div className="score">{game.team1_score}</div>
-            <div className="players">
-              {game.team1_players.map(p => (
-                <span key={p.id} className={`player ${p.user_id === game.current_actor_id ? 'acting' : ''}`}>{p.username}</span>
-              ))}
-            </div>
-            {user && !isPlayer && game.status === 'waiting' && <button onClick={() => handleJoinTeam(1)}>Join Team</button>}
+      <Container>
+        <div className="game-content">
+          <div className="scoreboard">
+            <Card active={game.current_team === 1} className="team-card">
+              <h2>{game.team1_name}</h2>
+              <div className="score">{game.team1_score}</div>
+              <div className="players">
+                {game.team1_players.map(p => (
+                  <span key={p.id} className={`player-badge ${p.user_id === game.current_actor_id ? 'acting' : ''}`}>{p.username}</span>
+                ))}
+              </div>
+              {user && !isPlayer && game.status === 'waiting' && <Button variant="primary" size="sm" onClick={() => handleJoinTeam(1)}>Join Team</Button>}
+            </Card>
+            <div className="vs">VS</div>
+            <Card active={game.current_team === 2} className="team-card">
+              <h2>{game.team2_name}</h2>
+              <div className="score">{game.team2_score}</div>
+              <div className="players">
+                {game.team2_players.map(p => (
+                  <span key={p.id} className={`player-badge ${p.user_id === game.current_actor_id ? 'acting' : ''}`}>{p.username}</span>
+                ))}
+              </div>
+              {user && !isPlayer && game.status === 'waiting' && <Button variant="primary" size="sm" onClick={() => handleJoinTeam(2)}>Join Team</Button>}
+            </Card>
           </div>
-          <div className="vs">VS</div>
-          <div className={`team ${game.current_team === 2 ? 'active' : ''}`}>
-            <h2>{game.team2_name}</h2>
-            <div className="score">{game.team2_score}</div>
-            <div className="players">
-              {game.team2_players.map(p => (
-                <span key={p.id} className={`player ${p.user_id === game.current_actor_id ? 'acting' : ''}`}>{p.username}</span>
-              ))}
-            </div>
-            {user && !isPlayer && game.status === 'waiting' && <button onClick={() => handleJoinTeam(2)}>Join Team</button>}
-          </div>
+
+          <p className="game-info">First to {game.winning_score} wins! • {game.status.toUpperCase()}</p>
+
+          {game.status === 'waiting' && (
+            <Card className="play-area">
+              <p>Waiting for players to join...</p>
+              {isCreator && game.team1_players.length > 0 && game.team2_players.length > 0 && (
+                <Button variant="primary" size="lg" onClick={handleStartGame}>Start Game</Button>
+              )}
+            </Card>
+          )}
+
+          {game.status === 'playing' && (
+            <Card className="play-area">
+              {isTurnActive && isCurrentActor ? (
+                <>
+                  <div className="timer">{timeLeft}s</div>
+                  <div className="word-display"><h2>{game.current_word || '...'}</h2></div>
+                  <div className="turn-actions">
+                    <Button variant="success" size="lg" onClick={handleCorrect}>✓ Correct!</Button>
+                    <Button variant="warning" size="lg" onClick={handleSkip}>Skip</Button>
+                  </div>
+                </>
+              ) : isTurnActive ? (
+                <>
+                  <div className="timer">{timeLeft}s</div>
+                  <p><strong>{currentActorName}</strong> is acting!</p>
+                  <p className="watching-text">Watch and guess the word!</p>
+                </>
+              ) : (
+                <>
+                  <p>It's <strong>{currentTeamName}</strong>'s turn!</p>
+                  <p><strong>{currentActorName}</strong> will act next.</p>
+                  {canStartTurn && <Button variant="primary" size="lg" onClick={handleStartTurn}>Start Turn</Button>}
+                </>
+              )}
+            </Card>
+          )}
+
+          {game.status === 'finished' && (
+            <Card className="finished-card">
+              <h2>🎉 Game Over!</h2>
+              <p className="winner">
+                {game.team1_score >= game.winning_score ? `${game.team1_name} wins!`
+                  : game.team2_score >= game.winning_score ? `${game.team2_name} wins!`
+                  : game.team1_score > game.team2_score ? `${game.team1_name} wins!`
+                  : game.team2_score > game.team1_score ? `${game.team2_name} wins!`
+                  : "It's a tie!"}
+              </p>
+            </Card>
+          )}
+
+          {isCreator && game.status === 'playing' && (
+            <Button variant="danger" className="end-game-btn" onClick={handleEndGame}>End Game</Button>
+          )}
         </div>
-
-        <div className="game-status"><p>First to {game.winning_score} wins! | Status: {game.status}</p></div>
-
-        {game.status === 'waiting' && (
-          <div className="waiting-section">
-            <p>Waiting for players to join...</p>
-            {isCreator && game.team1_players.length > 0 && game.team2_players.length > 0 && (
-              <button className="primary start-btn" onClick={handleStartGame}>Start Game</button>
-            )}
-          </div>
-        )}
-
-        {game.status === 'playing' && (
-          <div className="playing-section">
-            {isTurnActive && isCurrentActor ? (
-              <div className="turn-active">
-                <div className="timer">{timeLeft}s</div>
-                <div className="word-card"><h2>{game.current_word || '...'}</h2></div>
-                <div className="turn-actions">
-                  <button className="correct" onClick={handleCorrect}>✓ Correct!</button>
-                  <button className="skip" onClick={handleSkip}>Skip</button>
-                </div>
-              </div>
-            ) : isTurnActive ? (
-              <div className="turn-waiting">
-                <div className="timer">{timeLeft}s</div>
-                <p><strong>{currentActorName}</strong> is acting!</p>
-                <p className="hint">Watch and guess the word!</p>
-              </div>
-            ) : (
-              <div className="turn-waiting">
-                <p>It's <strong>{game.current_team === 1 ? game.team1_name : game.team2_name}</strong>'s turn!</p>
-                <p><strong>{currentActorName}</strong> will act next.</p>
-                {canStartTurn && <button className="primary" onClick={handleStartTurn}>Start Turn</button>}
-              </div>
-            )}
-          </div>
-        )}
-
-        {game.status === 'finished' && (
-          <div className="finished-section">
-            <h2>🎉 Game Over!</h2>
-            <div className="winner">
-              {game.team1_score >= game.winning_score ? <p>{game.team1_name} wins!</p>
-                : game.team2_score >= game.winning_score ? <p>{game.team2_name} wins!</p>
-                : game.team1_score > game.team2_score ? <p>{game.team1_name} wins!</p>
-                : game.team2_score > game.team1_score ? <p>{game.team2_name} wins!</p>
-                : <p>It's a tie!</p>}
-            </div>
-          </div>
-        )}
-
-        {isCreator && game.status === 'playing' && <button className="end-game-btn" onClick={handleEndGame}>End Game</button>}
-      </div>
+      </Container>
     </div>
   );
 }
