@@ -21,6 +21,7 @@ export default function GamePage({ user, onLogin }: GamePageProps) {
   const [guestName, setGuestName] = useState('');
   const [wordQueue, setWordQueue] = useState<string[]>([]);
   const [currentWord, setCurrentWord] = useState<string | null>(null);
+  const [turnScore, setTurnScore] = useState(0);
   const timerRef = useRef<number | null>(null);
   const pollingRef = useRef<number | null>(null);
 
@@ -54,10 +55,11 @@ export default function GamePage({ user, onLogin }: GamePageProps) {
     if (isTurnActive && timeLeft > 0) {
       timerRef.current = window.setTimeout(() => setTimeLeft(t => t - 1), 1000);
     } else if (isTurnActive && timeLeft === 0) {
-      handleEndTurn();
+      // If timer expires while acting a word, revoke all points from this turn
+      handleEndTurn(currentWord !== null);
     }
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
-  }, [isTurnActive, timeLeft]);
+  }, [isTurnActive, timeLeft, currentWord]);
 
   const handleGuestJoin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -92,6 +94,7 @@ export default function GamePage({ user, onLogin }: GamePageProps) {
         setCurrentWord(result.word);
       }
       setTimeLeft(game.turn_duration);
+      setTurnScore(0);
       setIsTurnActive(true);
     } catch (err) { setError((err as Error).message); }
   };
@@ -100,6 +103,7 @@ export default function GamePage({ user, onLogin }: GamePageProps) {
     if (!game || !currentWord) return;
     try {
       const result = await api.markCorrect(game.id);
+      setTurnScore(prev => prev + 1);
       if (result.game_over) { 
         setIsTurnActive(false);
         setCurrentWord(null);
@@ -110,16 +114,8 @@ export default function GamePage({ user, onLogin }: GamePageProps) {
         handleEndTurn(); 
         return; 
       }
-      // Immediately show next word from queue
-      if (wordQueue.length > 0) {
-        const nextWord = wordQueue[0];
-        setWordQueue(prev => prev.slice(1));
-        setCurrentWord(nextWord);
-        api.setNextWord(game.id, nextWord); // Fire and forget
-      } else {
-        setCurrentWord(null);
-        loadGame();
-      }
+      // Clear word - actor must click Next Word to continue
+      setCurrentWord(null);
     } catch (err) { setError((err as Error).message); }
   };
 
@@ -139,28 +135,17 @@ export default function GamePage({ user, onLogin }: GamePageProps) {
     } catch (err) { setError((err as Error).message); }
   };
 
-  const handleSkip = async () => {
-    if (!game) return;
-    try {
-      // Use next word from queue, put current word at end
-      if (wordQueue.length > 0 && currentWord) {
-        const nextWord = wordQueue[0];
-        setWordQueue(prev => [...prev.slice(1), currentWord]);
-        setCurrentWord(nextWord);
-        api.setNextWord(game.id, nextWord);
-      } else {
-        const result = await api.skipWord(game.id);
-        setCurrentWord(result.word);
-      }
-    } catch (err) { setError((err as Error).message); }
-  };
 
-  const handleEndTurn = async () => {
+
+  const handleEndTurn = async (timedOutWhileActing = false) => {
     if (!game) return;
     setIsTurnActive(false);
     setCurrentWord(null);
     setWordQueue([]);
-    try { await api.endTurn(game.id); loadGame(); } catch (err) { setError((err as Error).message); }
+    // If timed out while acting a word, revoke all points from this turn
+    const pointsToRevoke = timedOutWhileActing ? turnScore : 0;
+    setTurnScore(0);
+    try { await api.endTurn(game.id, pointsToRevoke); loadGame(); } catch (err) { setError((err as Error).message); }
   };
 
   const handleEndGame = async () => {
@@ -268,7 +253,7 @@ export default function GamePage({ user, onLogin }: GamePageProps) {
                       <div className="word-display"><h2>{currentWord}</h2></div>
                       <div className="turn-actions">
                         <Button variant="success" size="lg" onClick={handleCorrect}>✓ Correct!</Button>
-                        <Button variant="warning" size="lg" onClick={handleSkip}>Skip</Button>
+
                       </div>
                     </>
                   ) : (

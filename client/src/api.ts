@@ -109,14 +109,13 @@ export const api = {
     return res.json();
   },
 
-  async skipWord(id: string): Promise<{ word: string; no_other_words?: boolean }> {
-    const res = await fetch(`${API_BASE}/games/${id}/skip`, { method: 'POST', credentials: 'include' });
-    if (!res.ok) throw new Error((await res.json()).error);
-    return res.json();
-  },
-
-  async endTurn(id: string): Promise<{ current_team: number }> {
-    const res = await fetch(`${API_BASE}/games/${id}/end-turn`, { method: 'POST', credentials: 'include' });
+  async endTurn(id: string, revokePoints?: number): Promise<{ current_team: number }> {
+    const res = await fetch(`${API_BASE}/games/${id}/end-turn`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ revokePoints }),
+      credentials: 'include',
+    });
     if (!res.ok) throw new Error((await res.json()).error);
     return res.json();
   },

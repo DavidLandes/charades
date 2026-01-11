@@ -385,8 +385,17 @@ app.post('/api/games/:id/skip', authMiddleware, (req: AuthRequest, res: Response
 
 app.post('/api/games/:id/end-turn', authMiddleware, (req: AuthRequest, res: Response) => {
   const { id } = req.params;
+  const { revokePoints } = req.body || {};
   const game = db.prepare('SELECT * FROM games WHERE id = ?').get(id) as Game | undefined;
   if (!game) return res.status(404).json({ error: 'Game not found' });
+
+  // If time expired while acting a word, revoke all points from this turn
+  if (revokePoints && revokePoints > 0) {
+    const scoreField = game.current_team === 1 ? 'team1_score' : 'team2_score';
+    const currentScore = game.current_team === 1 ? game.team1_score : game.team2_score;
+    const newScore = Math.max(0, currentScore - revokePoints);
+    db.prepare(`UPDATE games SET ${scoreField} = ? WHERE id = ?`).run(newScore, game.id);
+  }
 
   const newTeam = game.current_team === 1 ? 2 : 1;
   const actorField = game.current_team === 1 ? 'current_actor_index_t1' : 'current_actor_index_t2';
