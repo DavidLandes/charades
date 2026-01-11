@@ -103,4 +103,9 @@ export const api = {
     const res = await fetch(`${API_BASE}/games/${id}/end`, { method: 'POST', credentials: 'include' });
     if (!res.ok) throw new Error((await res.json()).error);
   },
+
+  async deleteGame(id: string): Promise<void> {
+    const res = await fetch(`${API_BASE}/games/${id}`, { method: 'DELETE', credentials: 'include' });
+    if (!res.ok) throw new Error((await res.json()).error);
+  },
 };

@@ -340,21 +340,20 @@ app.post('/api/games/:id/correct', authMiddleware, (req: AuthRequest, res: Respo
 
   const scoreField = game.current_team === 1 ? 'team1_score' : 'team2_score';
   const newScore = (game.current_team === 1 ? game.team1_score : game.team2_score) + 1;
-  db.prepare(`UPDATE games SET ${scoreField} = ? WHERE id = ?`).run(newScore, game.id);
+  db.prepare(`UPDATE games SET ${scoreField} = ?, current_word = NULL WHERE id = ?`).run(newScore, game.id);
 
   if (newScore >= game.winning_score) {
-    db.prepare("UPDATE games SET status = 'finished', current_word = NULL WHERE id = ?").run(game.id);
-    return res.json({ word: null, game_over: true, winner: game.current_team });
+    db.prepare("UPDATE games SET status = 'finished' WHERE id = ?").run(game.id);
+    return res.json({ game_over: true, winner: game.current_team });
   }
 
-  const nextWord = db.prepare(`SELECT * FROM game_words WHERE game_id = ? AND guessed = 0 ORDER BY RANDOM() LIMIT 1`).get(game.id) as { word: string } | undefined;
-  if (!nextWord) {
-    db.prepare('UPDATE games SET current_word = NULL WHERE id = ?').run(game.id);
-    return res.json({ word: null, no_more_words: true });
+  const remainingWords = db.prepare(`SELECT COUNT(*) as count FROM game_words WHERE game_id = ? AND guessed = 0`).get(game.id) as { count: number };
+  if (remainingWords.count === 0) {
+    return res.json({ no_more_words: true });
   }
 
-  db.prepare('UPDATE games SET current_word = ? WHERE id = ?').run(nextWord.word, game.id);
-  res.json({ word: nextWord.word });
+  // Don't auto-assign next word - actor must request it
+  res.json({ success: true });
 });
 
 app.post('/api/games/:id/skip', authMiddleware, (req: AuthRequest, res: Response) => {
@@ -388,6 +387,18 @@ app.post('/api/games/:id/end-turn', authMiddleware, (req: AuthRequest, res: Resp
 app.post('/api/games/:id/end', authMiddleware, (req: AuthRequest, res: Response) => {
   const { id } = req.params;
   db.prepare("UPDATE games SET status = 'finished', current_word = NULL WHERE id = ?").run(id);
+  res.json({ success: true });
+});
+
+app.delete('/api/games/:id', authMiddleware, (req: AuthRequest, res: Response) => {
+  const { id } = req.params;
+  const game = db.prepare('SELECT * FROM games WHERE id = ?').get(id) as Game | undefined;
+  if (!game) return res.status(404).json({ error: 'Game not found' });
+  if (game.created_by !== req.user!.id) return res.status(403).json({ error: 'Only creator can delete' });
+
+  db.prepare('DELETE FROM game_words WHERE game_id = ?').run(id);
+  db.prepare('DELETE FROM game_players WHERE game_id = ?').run(id);
+  db.prepare('DELETE FROM games WHERE id = ?').run(id);
   res.json({ success: true });
 });
 

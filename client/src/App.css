@@ -15,6 +15,8 @@ body {
 
 .app {
   min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
 .loading {
@@ -121,8 +123,17 @@ form {
 }
 
 /* Dashboard */
+.dashboard {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
 .dashboard-content {
+  flex: 1;
   padding: 32px 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .actions {
@@ -130,6 +141,10 @@ form {
   gap: 16px;
   margin-bottom: 32px;
   flex-wrap: wrap;
+}
+
+.games-section {
+  flex: 1;
 }
 
 .games-section h2 {
@@ -159,6 +174,28 @@ form {
 .game-card:hover {
   transform: translateY(-4px);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
+}
+
+.game-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.game-card-header h3 {
+  margin: 0;
+}
+
+.game-card .delete-btn {
+  padding: 4px 8px;
+  font-size: 0.75rem;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
+.game-card .delete-btn:hover {
+  opacity: 1;
 }
 
 .game-card h3 {
@@ -197,10 +234,17 @@ form {
 /* Game page */
 .game-page {
   min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
 .game-content {
+  flex: 1;
   padding: 32px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
 }
 
 .share-section {
@@ -302,6 +346,8 @@ form {
 /* Playing section */
 .play-area {
   text-align: center;
+  width: 100%;
+  max-width: 500px;
 }
 
 .play-area p {
@@ -346,6 +392,12 @@ form {
 .watching-text {
   font-style: italic;
   color: #718096;
+}
+
+.ready-text {
+  font-size: 1.25rem;
+  color: #4a5568;
+  margin-bottom: 20px;
 }
 
 /* Finished section */

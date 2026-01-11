@@ -81,7 +81,26 @@ export default function GamePage({ user, onLogin }: GamePageProps) {
     if (!game) return;
     try {
       const result = await api.markCorrect(game.id);
-      if (result.game_over || result.no_more_words || !result.word) { handleEndTurn(); return; }
+      if (result.game_over) { 
+        setIsTurnActive(false);
+        loadGame(); 
+        return; 
+      }
+      if (result.no_more_words) { 
+        handleEndTurn(); 
+        return; 
+      }
+      // Word marked correct, but don't auto-fetch next word
+      // Actor must click "Next Word" to continue
+      loadGame();
+    } catch (err) { setError((err as Error).message); }
+  };
+
+  const handleNextWord = async () => {
+    if (!game) return;
+    try {
+      const result = await api.startTurn(game.id);
+      if (result.finished) { handleEndTurn(); return; }
       loadGame();
     } catch (err) { setError((err as Error).message); }
   };
@@ -194,11 +213,20 @@ export default function GamePage({ user, onLogin }: GamePageProps) {
               {isTurnActive && isCurrentActor ? (
                 <>
                   <div className="timer">{timeLeft}s</div>
-                  <div className="word-display"><h2>{game.current_word || '...'}</h2></div>
-                  <div className="turn-actions">
-                    <Button variant="success" size="lg" onClick={handleCorrect}>✓ Correct!</Button>
-                    <Button variant="warning" size="lg" onClick={handleSkip}>Skip</Button>
-                  </div>
+                  {game.current_word ? (
+                    <>
+                      <div className="word-display"><h2>{game.current_word}</h2></div>
+                      <div className="turn-actions">
+                        <Button variant="success" size="lg" onClick={handleCorrect}>✓ Correct!</Button>
+                        <Button variant="warning" size="lg" onClick={handleSkip}>Skip</Button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <p className="ready-text">Ready for the next word?</p>
+                      <Button variant="primary" size="lg" onClick={handleNextWord}>Next Word</Button>
+                    </>
+                  )}
                 </>
               ) : isTurnActive ? (
                 <>

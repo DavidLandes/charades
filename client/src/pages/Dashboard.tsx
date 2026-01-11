@@ -50,6 +50,17 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
     return 'finished';
   };
 
+  const handleDeleteGame = async (e: React.MouseEvent, gameId: string) => {
+    e.stopPropagation();
+    if (!confirm('Are you sure you want to delete this game?')) return;
+    try {
+      await api.deleteGame(gameId);
+      loadGames();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
+
   return (
     <div className="dashboard">
       <header className="header">
@@ -103,7 +114,10 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
               <div className="games-grid">
                 {games.map(game => (
                   <Card key={game.id} className="game-card" onClick={() => navigate(`/game/${game.id}`)}>
-                    <h3>{game.name}</h3>
+                    <div className="game-card-header">
+                      <h3>{game.name}</h3>
+                      <Button variant="danger" size="sm" className="delete-btn" onClick={(e) => handleDeleteGame(e, game.id)}>×</Button>
+                    </div>
                     <p><span className={`status-badge ${getStatusClass(game.status)}`}>{game.status}</span></p>
                     <p>{game.team1_name}: {game.team1_score} - {game.team2_name}: {game.team2_score}</p>
                     <p><span className="game-code">Code: {game.share_code}</span></p>
