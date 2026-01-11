@@ -1,0 +1,15 @@
+[Unit]
+Description=Guesstures Charades Game
+After=network.target
+
+[Service]
+Type=simple
+User=exedev
+WorkingDirectory=/home/exedev/guesstures/api
+Environment=PATH=/home/exedev/.bun/bin:/usr/bin
+ExecStart=/home/exedev/.bun/bin/bun run index.ts
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
