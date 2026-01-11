@@ -12,42 +12,25 @@ function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const storedUser = api.getUser();
-    if (storedUser) {
-      setUser(storedUser);
-    }
-    setLoading(false);
+    api.getMe().then(u => {
+      setUser(u);
+      setLoading(false);
+    });
   }, []);
 
-  const handleLogout = () => {
-    api.logout();
+  const handleLogout = async () => {
+    await api.logout();
     setUser(null);
   };
 
-  if (loading) {
-    return <div className="loading">Loading...</div>;
-  }
+  if (loading) return <div className="loading">Loading...</div>;
 
   return (
     <BrowserRouter>
       <div className="app">
         <Routes>
-          <Route
-            path="/"
-            element={
-              user ? <Navigate to="/dashboard" /> : <Home onLogin={setUser} />
-            }
-          />
-          <Route
-            path="/dashboard"
-            element={
-              user ? (
-                <Dashboard user={user} onLogout={handleLogout} />
-              ) : (
-                <Navigate to="/" />
-              )
-            }
-          />
+          <Route path="/" element={user ? <Navigate to="/dashboard" /> : <Home onLogin={setUser} />} />
+          <Route path="/dashboard" element={user ? <Dashboard user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
           <Route path="/game/:idOrCode" element={<GamePage user={user} onLogin={setUser} />} />
         </Routes>
       </div>

@@ -130,6 +130,25 @@ button:disabled {
   margin-bottom: 15px;
 }
 
+.success {
+  background: #d4edda;
+  color: #155724;
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 15px;
+}
+
+.player.acting {
+  background: #667eea;
+  color: white;
+  font-weight: bold;
+}
+
+.hint {
+  color: #666;
+  font-style: italic;
+}
+
 /* Dashboard */
 .dashboard {
   min-height: 100vh;

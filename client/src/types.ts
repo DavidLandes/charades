@@ -1,5 +1,6 @@
 export interface User {
   id: string;
+  email?: string;
   username: string;
   is_guest: boolean;
 }
@@ -22,13 +23,15 @@ export interface Game {
   team1_score: number;
   team2_score: number;
   current_team: number;
-  current_round: number;
-  total_rounds: number;
+  current_actor_index_t1: number;
+  current_actor_index_t2: number;
   turn_duration: number;
+  winning_score: number;
   status: 'waiting' | 'playing' | 'finished';
-  current_word?: string;
+  current_word?: string | null;
   turn_started_at?: string;
   share_code: string;
   team1_players: Player[];
   team2_players: Player[];
+  current_actor_id?: string;
 }
