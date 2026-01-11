@@ -3,11 +3,22 @@ import type { User, Game } from './types';
 const API_BASE = '/api';
 
 export const api = {
-  async sendLoginLink(email: string): Promise<{ success: boolean; previewUrl?: string }> {
+  async sendLoginLink(email: string): Promise<{ success: boolean; loginLink?: string; message?: string }> {
     const res = await fetch(`${API_BASE}/auth/send-link`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email }),
+      credentials: 'include',
+    });
+    if (!res.ok) throw new Error((await res.json()).error);
+    return res.json();
+  },
+
+  async verifyToken(token: string): Promise<{ success: boolean; user: User }> {
+    const res = await fetch(`${API_BASE}/auth/verify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token }),
       credentials: 'include',
     });
     if (!res.ok) throw new Error((await res.json()).error);
@@ -81,8 +92,19 @@ export const api = {
     return res.json();
   },
 
-  async markCorrect(id: string): Promise<{ word: string | null; no_more_words?: boolean; game_over?: boolean; winner?: number }> {
+  async markCorrect(id: string): Promise<{ success?: boolean; new_score?: number; no_more_words?: boolean; game_over?: boolean; winner?: number }> {
     const res = await fetch(`${API_BASE}/games/${id}/correct`, { method: 'POST', credentials: 'include' });
+    if (!res.ok) throw new Error((await res.json()).error);
+    return res.json();
+  },
+
+  async setNextWord(id: string, word: string): Promise<{ word: string; no_more_words?: boolean }> {
+    const res = await fetch(`${API_BASE}/games/${id}/next-word`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ word }),
+      credentials: 'include',
+    });
     if (!res.ok) throw new Error((await res.json()).error);
     return res.json();
   },

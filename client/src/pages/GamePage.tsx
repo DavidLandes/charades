@@ -19,19 +19,30 @@ export default function GamePage({ user, onLogin }: GamePageProps) {
   const [isTurnActive, setIsTurnActive] = useState(false);
   const [showJoinModal, setShowJoinModal] = useState(false);
   const [guestName, setGuestName] = useState('');
+  const [wordQueue, setWordQueue] = useState<string[]>([]);
+  const [currentWord, setCurrentWord] = useState<string | null>(null);
   const timerRef = useRef<number | null>(null);
   const pollingRef = useRef<number | null>(null);
 
   const loadGame = useCallback(async () => {
     if (!idOrCode) return;
     try {
-      setGame(await api.getGame(idOrCode));
+      const gameData = await api.getGame(idOrCode);
+      setGame(gameData);
+      // Update word queue if actor
+      if (gameData.word_queue && gameData.word_queue.length > 0) {
+        setWordQueue(gameData.word_queue);
+      }
+      // Sync current word from server if not in active turn
+      if (!isTurnActive && gameData.current_word) {
+        setCurrentWord(gameData.current_word);
+      }
     } catch {
       setError('Game not found');
     } finally {
       setLoading(false);
     }
-  }, [idOrCode]);
+  }, [idOrCode, isTurnActive]);
 
   useEffect(() => {
     loadGame();
@@ -69,20 +80,29 @@ export default function GamePage({ user, onLogin }: GamePageProps) {
   const handleStartTurn = async () => {
     if (!game) return;
     try {
-      const result = await api.startTurn(game.id);
-      if (result.finished) { loadGame(); return; }
+      // Use word from queue if available, otherwise fetch from server
+      if (wordQueue.length > 0) {
+        const nextWord = wordQueue[0];
+        setWordQueue(prev => prev.slice(1));
+        setCurrentWord(nextWord);
+        await api.setNextWord(game.id, nextWord);
+      } else {
+        const result = await api.startTurn(game.id);
+        if (result.finished) { loadGame(); return; }
+        setCurrentWord(result.word);
+      }
       setTimeLeft(game.turn_duration);
       setIsTurnActive(true);
-      loadGame();
     } catch (err) { setError((err as Error).message); }
   };
 
   const handleCorrect = async () => {
-    if (!game) return;
+    if (!game || !currentWord) return;
     try {
       const result = await api.markCorrect(game.id);
       if (result.game_over) { 
         setIsTurnActive(false);
+        setCurrentWord(null);
         loadGame(); 
         return; 
       }
@@ -90,29 +110,56 @@ export default function GamePage({ user, onLogin }: GamePageProps) {
         handleEndTurn(); 
         return; 
       }
-      // Word marked correct, but don't auto-fetch next word
-      // Actor must click "Next Word" to continue
-      loadGame();
+      // Immediately show next word from queue
+      if (wordQueue.length > 0) {
+        const nextWord = wordQueue[0];
+        setWordQueue(prev => prev.slice(1));
+        setCurrentWord(nextWord);
+        api.setNextWord(game.id, nextWord); // Fire and forget
+      } else {
+        setCurrentWord(null);
+        loadGame();
+      }
     } catch (err) { setError((err as Error).message); }
   };
 
   const handleNextWord = async () => {
     if (!game) return;
     try {
-      const result = await api.startTurn(game.id);
-      if (result.finished) { handleEndTurn(); return; }
-      loadGame();
+      if (wordQueue.length > 0) {
+        const nextWord = wordQueue[0];
+        setWordQueue(prev => prev.slice(1));
+        setCurrentWord(nextWord);
+        api.setNextWord(game.id, nextWord);
+      } else {
+        const result = await api.startTurn(game.id);
+        if (result.finished) { handleEndTurn(); return; }
+        setCurrentWord(result.word);
+      }
     } catch (err) { setError((err as Error).message); }
   };
 
   const handleSkip = async () => {
     if (!game) return;
-    try { await api.skipWord(game.id); loadGame(); } catch (err) { setError((err as Error).message); }
+    try {
+      // Use next word from queue, put current word at end
+      if (wordQueue.length > 0 && currentWord) {
+        const nextWord = wordQueue[0];
+        setWordQueue(prev => [...prev.slice(1), currentWord]);
+        setCurrentWord(nextWord);
+        api.setNextWord(game.id, nextWord);
+      } else {
+        const result = await api.skipWord(game.id);
+        setCurrentWord(result.word);
+      }
+    } catch (err) { setError((err as Error).message); }
   };
 
   const handleEndTurn = async () => {
     if (!game) return;
     setIsTurnActive(false);
+    setCurrentWord(null);
+    setWordQueue([]);
     try { await api.endTurn(game.id); loadGame(); } catch (err) { setError((err as Error).message); }
   };
 
@@ -134,7 +181,7 @@ export default function GamePage({ user, onLogin }: GamePageProps) {
   const isPlayer = user && (game.team1_players.some(p => p.user_id === user.id) || game.team2_players.some(p => p.user_id === user.id));
   const isCurrentActor = user?.id === game.current_actor_id;
   const isCreator = user?.id === game.created_by;
-  const canStartTurn = game.status === 'playing' && isCurrentActor && !isTurnActive && !game.current_word;
+  const canStartTurn = game.status === 'playing' && isCurrentActor && !isTurnActive && !currentWord;
   const currentActorName = (game.current_team === 1 ? game.team1_players : game.team2_players)
     .find(p => p.user_id === game.current_actor_id)?.username;
   const currentTeamName = game.current_team === 1 ? game.team1_name : game.team2_name;
@@ -146,7 +193,10 @@ export default function GamePage({ user, onLogin }: GamePageProps) {
         <h1>{game.name}</h1>
         <div className="share-section">
           <span className="code">{game.share_code}</span>
-          <Button variant="primary" size="sm" onClick={() => navigator.clipboard.writeText(`${window.location.origin}/game/${game.share_code}`)}>Copy Link</Button>
+          <Button variant="primary" size="sm" onClick={() => navigator.clipboard.writeText(`${window.location.origin}/game/${game.share_code}`)}>Copy</Button>
+          {isCreator && game.status === 'playing' && (
+            <Button variant="secondary" size="sm" onClick={handleEndGame}>End</Button>
+          )}
         </div>
       </header>
 
@@ -213,9 +263,9 @@ export default function GamePage({ user, onLogin }: GamePageProps) {
               {isTurnActive && isCurrentActor ? (
                 <>
                   <div className="timer">{timeLeft}s</div>
-                  {game.current_word ? (
+                  {currentWord ? (
                     <>
-                      <div className="word-display"><h2>{game.current_word}</h2></div>
+                      <div className="word-display"><h2>{currentWord}</h2></div>
                       <div className="turn-actions">
                         <Button variant="success" size="lg" onClick={handleCorrect}>✓ Correct!</Button>
                         <Button variant="warning" size="lg" onClick={handleSkip}>Skip</Button>
@@ -255,10 +305,6 @@ export default function GamePage({ user, onLogin }: GamePageProps) {
                   : "It's a tie!"}
               </p>
             </Card>
-          )}
-
-          {isCreator && game.status === 'playing' && (
-            <Button variant="danger" className="end-game-btn" onClick={handleEndGame}>End Game</Button>
           )}
         </div>
       </Container>

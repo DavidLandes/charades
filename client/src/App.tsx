@@ -5,6 +5,7 @@ import { api } from './api';
 import Home from './pages/Home';
 import Dashboard from './pages/Dashboard';
 import GamePage from './pages/GamePage';
+import VerifyAuth from './pages/VerifyAuth';
 import './App.css';
 
 function App() {
@@ -30,6 +31,7 @@ function App() {
       <div className="app">
         <Routes>
           <Route path="/" element={user ? <Navigate to="/dashboard" /> : <Home onLogin={setUser} />} />
+          <Route path="/auth/verify/:token" element={<VerifyAuth onLogin={setUser} />} />
           <Route path="/dashboard" element={user ? <Dashboard user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
           <Route path="/game/:idOrCode" element={<GamePage user={user} onLogin={setUser} />} />
         </Routes>

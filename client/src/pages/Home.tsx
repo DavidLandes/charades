@@ -15,16 +15,22 @@ export default function Home({ onLogin }: HomeProps) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const [loginLink, setLoginLink] = useState('');
+
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setMessage('');
+    setLoginLink('');
     setLoading(true);
     try {
       const result = await api.sendLoginLink(email);
-      setMessage(result.previewUrl 
-        ? `Email sent! Preview: ${result.previewUrl}`
-        : 'Check your email for a sign-in link!');
+      if (result.loginLink) {
+        setLoginLink(result.loginLink);
+        setMessage('Click the link below to sign in:');
+      } else {
+        setMessage(result.message || 'Check your email for a sign-in link!');
+      }
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -59,6 +65,7 @@ export default function Home({ onLogin }: HomeProps) {
 
         {error && <Alert type="error">{error}</Alert>}
         {message && <Alert type="success">{message}</Alert>}
+        {loginLink && <a href={loginLink} className="login-link">Click here to sign in</a>}
 
         {mode === 'email' ? (
           <form onSubmit={handleEmailLogin}>

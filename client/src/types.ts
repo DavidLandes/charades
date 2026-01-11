@@ -29,6 +29,7 @@ export interface Game {
   winning_score: number;
   status: 'waiting' | 'playing' | 'finished';
   current_word?: string | null;
+  word_queue?: string[];
   turn_started_at?: string;
   share_code: string;
   team1_players: Player[];

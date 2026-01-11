@@ -3,7 +3,7 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import { Database } from 'bun:sqlite';
 import { v4 as uuidv4 } from 'uuid';
-import nodemailer from 'nodemailer';
+// import nodemailer from 'nodemailer'; // Uncomment for production email
 import path from 'path';
 
 const app = express();
@@ -14,18 +14,9 @@ app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 app.use(cookieParser());
 
-// Email transporter (using ethereal for dev, configure for production)
-let transporter: nodemailer.Transporter;
-(async () => {
-  const testAccount = await nodemailer.createTestAccount();
-  transporter = nodemailer.createTransport({
-    host: 'smtp.ethereal.email',
-    port: 587,
-    secure: false,
-    auth: { user: testAccount.user, pass: testAccount.pass },
-  });
-  console.log('Email test account:', testAccount.user);
-})();
+// For development, we'll show the login link directly
+// In production, configure a real email service
+const DEV_MODE = !process.env.SMTP_HOST;
 
 // Initialize database
 const db = new Database(path.join(import.meta.dir, 'guesstures.db'));
@@ -171,28 +162,24 @@ app.post('/api/auth/send-link', async (req: Request, res: Response) => {
   
   db.prepare('INSERT INTO auth_tokens (id, email, token, expires_at) VALUES (?, ?, ?, ?)').run(uuidv4(), email, token, expiresAt);
 
-  const link = `${BASE_URL}/api/auth/verify?token=${token}`;
+  const link = `${BASE_URL}/auth/verify/${token}`;
   
-  try {
-    const info = await transporter.sendMail({
-      from: '"Guesstures" <noreply@guesstures.com>',
-      to: email,
-      subject: 'Sign in to Guesstures',
-      html: `<p>Click <a href="${link}">here</a> to sign in to Guesstures.</p><p>Link expires in 15 minutes.</p>`,
-    });
-    console.log('Email preview:', nodemailer.getTestMessageUrl(info));
-    res.json({ success: true, previewUrl: nodemailer.getTestMessageUrl(info) });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to send email' });
+  if (DEV_MODE) {
+    // In dev mode, return the link directly
+    console.log(`Login link for ${email}: ${link}`);
+    res.json({ success: true, loginLink: link });
+  } else {
+    // In production, send email (configure SMTP_HOST, etc.)
+    res.json({ success: true, message: 'Check your email for a sign-in link' });
   }
 });
 
-app.get('/api/auth/verify', (req: Request, res: Response) => {
-  const { token } = req.query;
-  if (!token) return res.redirect('/?error=invalid_token');
+app.post('/api/auth/verify', (req: Request, res: Response) => {
+  const { token } = req.body;
+  if (!token) return res.status(400).json({ error: 'Token required' });
 
   const authToken = db.prepare(`SELECT * FROM auth_tokens WHERE token = ? AND expires_at > datetime('now') AND used = 0`).get(token) as { id: string; email: string } | undefined;
-  if (!authToken) return res.redirect('/?error=expired_token');
+  if (!authToken) return res.status(400).json({ error: 'Invalid or expired token' });
 
   db.prepare('UPDATE auth_tokens SET used = 1 WHERE id = ?').run(authToken.id);
 
@@ -209,7 +196,7 @@ app.get('/api/auth/verify', (req: Request, res: Response) => {
   db.prepare('INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)').run(sessionId, user.id, sessionExpires);
 
   res.cookie('session', sessionId, { httpOnly: true, maxAge: 30 * 24 * 60 * 60 * 1000, sameSite: 'lax' });
-  res.redirect('/dashboard');
+  res.json({ success: true, user: { id: user.id, email: user.email, username: user.username, is_guest: false } });
 });
 
 app.post('/api/auth/guest', (req: Request, res: Response) => {
@@ -274,8 +261,15 @@ app.get('/api/games/:idOrCode', optionalAuth, (req: AuthRequest, res: Response) 
 
   const isCurrentActor = req.user?.id === currentActorId;
   const wordToShow = (game.status === 'playing' && isCurrentActor) ? game.current_word : null;
+  
+  // Pre-load word queue for the current actor (5 words)
+  let wordQueue: string[] = [];
+  if (isCurrentActor && game.status === 'playing') {
+    const upcomingWords = db.prepare(`SELECT word FROM game_words WHERE game_id = ? AND guessed = 0 ORDER BY RANDOM() LIMIT 5`).all(game.id) as { word: string }[];
+    wordQueue = upcomingWords.map(w => w.word);
+  }
 
-  res.json({ ...game, current_word: wordToShow, team1_players: team1, team2_players: team2, current_actor_id: currentActorId });
+  res.json({ ...game, current_word: wordToShow, word_queue: wordQueue, team1_players: team1, team2_players: team2, current_actor_id: currentActorId });
 });
 
 app.post('/api/games/:id/join', authMiddleware, (req: AuthRequest, res: Response) => {
@@ -352,8 +346,28 @@ app.post('/api/games/:id/correct', authMiddleware, (req: AuthRequest, res: Respo
     return res.json({ no_more_words: true });
   }
 
-  // Don't auto-assign next word - actor must request it
-  res.json({ success: true });
+  res.json({ success: true, new_score: newScore });
+});
+
+// Set next word from client queue (fast path)
+app.post('/api/games/:id/next-word', authMiddleware, (req: AuthRequest, res: Response) => {
+  const { id } = req.params;
+  const { word } = req.body;
+  const game = db.prepare('SELECT * FROM games WHERE id = ?').get(id) as Game | undefined;
+  if (!game) return res.status(404).json({ error: 'Game not found' });
+  
+  // Verify word is available
+  const available = db.prepare('SELECT * FROM game_words WHERE game_id = ? AND word = ? AND guessed = 0').get(game.id, word);
+  if (!available) {
+    // Word already used, get a random one
+    const randomWord = db.prepare('SELECT word FROM game_words WHERE game_id = ? AND guessed = 0 ORDER BY RANDOM() LIMIT 1').get(game.id) as { word: string } | undefined;
+    if (!randomWord) return res.json({ no_more_words: true });
+    db.prepare('UPDATE games SET current_word = ? WHERE id = ?').run(randomWord.word, game.id);
+    return res.json({ word: randomWord.word });
+  }
+  
+  db.prepare('UPDATE games SET current_word = ? WHERE id = ?').run(word, game.id);
+  res.json({ word });
 });
 
 app.post('/api/games/:id/skip', authMiddleware, (req: AuthRequest, res: Response) => {
